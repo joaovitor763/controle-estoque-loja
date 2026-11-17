@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Estoque - Loja</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338CA;
+            --success: #10B981;
+            --danger: #EF4444;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        header p {
+            font-size: 0.9rem;
+            color: #6B7280;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .product-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .product-info h3 {
+            font-size: 1rem;
+        }
+
+        .product-info p {
+            font-size: 0.8rem;
+            color: #6B7280;
+        }
+
+        .product-actions button {
+            width: auto;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            background-color: var(--success);
+            margin-left: 5px;
+        }
+
+        .product-actions button.vender {
+            background-color: #F59E0B;
+        }
+
+        .alerta-baixo {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .alert-box {
+            background-color: #FEE2E2;
+            border: 1px solid #F87171;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            color: #991B1B;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📦 Controle de Estoque</h1>
+        <p>Versão Mobile / Web para Lojas</p>
+    </header>
+
+    <div id="alertaGeral" class="alert-box">
+        ⚠️ Existem produtos com estoque crítico!
+    </div>
+
+    <!-- Formulário de Cadastro -->
+    <div class="card">
+        <h2>Cadastrar Novo Produto</h2>
+        <div class="form-group">
+            <label>Nome do Produto</label>
+            <input type="text" id="nomeProduto" placeholder="Ex: Camiseta Polo">
+        </div>
+        <div class="form-group">
+            <label>Quantidade Atual</label>
+            <input type="number" id="qtdProduto" placeholder="Ex: 15">
+        </div>
+        <div class="form-group">
+            <label>Estoque Mínimo (Alerta)</label>
+            <input type="number" id="minProduto" placeholder="Ex: 3">
+        </div>
+        <div class="form-group">
+            <label>Preço de Venda (R$)</label>
+            <input type="number" step="0.01" id="precoProduto" placeholder="Ex: 49.90">
+        </div>
+        <button onclick="cadastrarProduto()">Salvar Produto</button>
+    </div>
+
+    <!-- Lista de Produtos -->
+    <div class="card">
+        <h2>Produtos no Estoque</h2>
+        <ul id="listaProdutos" class="product-list">
+            <!-- Os produtos entram aqui automaticamente -->
+        </ul>
+    </div>
+
+    <script>
+        // Carrega o estoque salvo no navegador do celular/pc (LocalStorage)
+        let estoque = JSON.parse(localStorage.getItem('estoque_loja')) || [];
+
+        function salvarNoStorage() {
+            localStorage.setItem('estoque_loja', JSON.stringify(estoque));
+            atualizarTela();
+        }
+
+        function cadastrarProduto() {
+            const nome = document.getElementById('nomeProduto').value.trim();
+            const qtd = parseInt(document.getElementById('qtdProduto').value);
+            const minimo = parseInt(document.getElementById('minProduto').value);
+            const preco = parseFloat(document.getElementById('precoProduto').value);
+
+            if (!nome || isNaN(qtd) || isNaN(minimo) || isNaN(preco)) {
+                alert("Por favor, preencha todos os campos corretamente!");
+                return;
+            }
+
+            const produto = { id: Date.now(), nome, qtd, minimo, preco };
+            estoque.push(produto);
+            salvarNoStorage();
+
+            // Limpa os campos
+            document.getElementById('nomeProduto').value = '';
+            document.getElementById('qtdProduto').value = '';
+            document.getElementById('minProduto').value = '';
+            document.getElementById('precoProduto').value = '';
+        }
+
+        function registrarVenda(id) {
+            const produto = estoque.find(p => p.id === id);
+            if (produto) {
+                const qtdVendaStr = prompt(`Quantas unidades de "${produto.nome}" foram vendidas?`, "1");
+                if (qtdVendaStr === null) return;
+                const qtdVenda = parseInt(qtdVendaStr);
+
+                if (isNaN(qtdVenda) || qtdVenda <= 0) {
+                    alert("Quantidade inválida!");
+                    return;
+                }
+
+                if (produto.qtd >= qtdVenda) {
+                    produto.qtd -= qtdVenda;
+                    salvarNoStorage();
+                } else {
+                    alert("Erro: Quantidade vendida maior do que o estoque atual!");
+                }
+            }
+        }
+
+        function excluirProduto(id) {
+            if (confirm("Deseja realmente apagar este produto?")) {
+                estoque = estoque.filter(p => p.id !== id);
+                salvarNoStorage();
+            }
+        }
+
+        function atualizarTela() {
+            const lista = document.getElementById('listaProdutos');
+            const alertaGeral = document.getElementById('alertaGeral');
+            lista.innerHTML = '';
+            
+            let temAlerta = false;
+
+            if (estoque.length === 0) {
+                lista.innerHTML = '<p style="text-align: center; color: #6B7280; padding: 20px;">Nenhum produto cadastrado.</p>';
+                alertaGeral.style.display = 'none';
+                return;
+            }
+
+            estoque.forEach(p => {
+                if (p.qtd <= p.minimo) {
+                    temAlerta = true;
+                }
+
+                const li = document.createElement('li');
+                li.className = 'product-item';
+                
+                li.innerHTML = `
+                    <div class="product-info">
+                        <h3>${p.nome}</h3>
+                        <p>Qtd: <span class="${p.qtd <= p.minimo ? 'alerta-baixo' : ''}">${p.qtd}</span> (Mín: ${p.minimo}) | R$ ${p.preco.toFixed(2)}</p>
+                    </div>
+                    <div class="product-actions">
+                        <button class="vender" onclick="registrarVenda(${p.id})">Vender</button>
+                        <button style="background-color: #EF4444;" onclick="excluirProduto(${p.id})">X</button>
+                    </div>
+                `;
+                lista.appendChild(li);
+            });
+
+            if (temAlerta) {
+                alertaGeral.style.display = 'block';
+            } else {
+                alertaGeral.style.display = 'none';
+            }
+        }
+
+        // Executa ao carregar a página
+        atualizarTela();
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Estoque - Loja</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338CA;
+            --success: #10B981;
+            --danger: #EF4444;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        header p {
+            font-size: 0.9rem;
+            color: #6B7280;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .product-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .product-info h3 {
+            font-size: 1rem;
+        }
+
+        .product-info p {
+            font-size: 0.8rem;
+            color: #6B7280;
+        }
+
+        .product-actions button {
+            width: auto;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            background-color: var(--success);
+            margin-left: 5px;
+        }
+
+        .product-actions button.vender {
+            background-color: #F59E0B;
+        }
+
+        .alerta-baixo {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .alert-box {
+            background-color: #FEE2E2;
+            border: 1px solid #F87171;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            color: #991B1B;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📦 Controle de Estoque</h1>
+        <p>Versão Mobile / Web para Lojas</p>
+    </header>
+
+    <div id="alertaGeral" class="alert-box">
+        ⚠️ Existem produtos com estoque crítico!
+    </div>
+
+    <!-- Formulário de Cadastro -->
+    <div class="card">
+        <h2>Cadastrar Novo Produto</h2>
+        <div class="form-group">
+            <label>Nome do Produto</label>
+            <input type="text" id="nomeProduto" placeholder="Ex: Camiseta Polo">
+        </div>
+        <div class="form-group">
+            <label>Quantidade Atual</label>
+            <input type="number" id="qtdProduto" placeholder="Ex: 15">
+        </div>
+        <div class="form-group">
+            <label>Estoque Mínimo (Alerta)</label>
+            <input type="number" id="minProduto" placeholder="Ex: 3">
+        </div>
+        <div class="form-group">
+            <label>Preço de Venda (R$)</label>
+            <input type="number" step="0.01" id="precoProduto" placeholder="Ex: 49.90">
+        </div>
+        <button onclick="cadastrarProduto()">Salvar Produto</button>
+    </div>
+
+    <!-- Lista de Produtos -->
+    <div class="card">
+        <h2>Produtos no Estoque</h2>
+        <ul id="listaProdutos" class="product-list">
+            <!-- Os produtos entram aqui automaticamente -->
+        </ul>
+    </div>
+
+    <script>
+        // Carrega o estoque salvo no navegador do celular/pc (LocalStorage)
+        let estoque = JSON.parse(localStorage.getItem('estoque_loja')) || [];
+
+        function salvarNoStorage() {
+            localStorage.setItem('estoque_loja', JSON.stringify(estoque));
+            atualizarTela();
+        }
+
+        function cadastrarProduto() {
+            const nome = document.getElementById('nomeProduto').value.trim();
+            const qtd = parseInt(document.getElementById('qtdProduto').value);
+            const minimo = parseInt(document.getElementById('minProduto').value);
+            const preco = parseFloat(document.getElementById('precoProduto').value);
+
+            if (!nome || isNaN(qtd) || isNaN(minimo) || isNaN(preco)) {
+                alert("Por favor, preencha todos os campos corretamente!");
+                return;
+            }
+
+            const produto = { id: Date.now(), nome, qtd, minimo, preco };
+            estoque.push(produto);
+            salvarNoStorage();
+
+            // Limpa os campos
+            document.getElementById('nomeProduto').value = '';
+            document.getElementById('qtdProduto').value = '';
+            document.getElementById('minProduto').value = '';
+            document.getElementById('precoProduto').value = '';
+        }
+
+        function registrarVenda(id) {
+            const produto = estoque.find(p => p.id === id);
+            if (produto) {
+                const qtdVendaStr = prompt(`Quantas unidades de "${produto.nome}" foram vendidas?`, "1");
+                if (qtdVendaStr === null) return;
+                const qtdVenda = parseInt(qtdVendaStr);
+
+                if (isNaN(qtdVenda) || qtdVenda <= 0) {
+                    alert("Quantidade inválida!");
+                    return;
+                }
+
+                if (produto.qtd >= qtdVenda) {
+                    produto.qtd -= qtdVenda;
+                    salvarNoStorage();
+                } else {
+                    alert("Erro: Quantidade vendida maior do que o estoque atual!");
+                }
+            }
+        }
+
+        function excluirProduto(id) {
+            if (confirm("Deseja realmente apagar este produto?")) {
+                estoque = estoque.filter(p => p.id !== id);
+                salvarNoStorage();
+            }
+        }
+
+        function atualizarTela() {
+            const lista = document.getElementById('listaProdutos');
+            const alertaGeral = document.getElementById('alertaGeral');
+            lista.innerHTML = '';
+            
+            let temAlerta = false;
+
+            if (estoque.length === 0) {
+                lista.innerHTML = '<p style="text-align: center; color: #6B7280; padding: 20px;">Nenhum produto cadastrado.</p>';
+                alertaGeral.style.display = 'none';
+                return;
+            }
+
+            estoque.forEach(p => {
+                if (p.qtd <= p.minimo) {
+                    temAlerta = true;
+                }
+
+                const li = document.createElement('li');
+                li.className = 'product-item';
+                
+                li.innerHTML = `
+                    <div class="product-info">
+                        <h3>${p.nome}</h3>
+                        <p>Qtd: <span class="${p.qtd <= p.minimo ? 'alerta-baixo' : ''}">${p.qtd}</span> (Mín: ${p.minimo}) | R$ ${p.preco.toFixed(2)}</p>
+                    </div>
+                    <div class="product-actions">
+                        <button class="vender" onclick="registrarVenda(${p.id})">Vender</button>
+                        <<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Estoque - Loja</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338CA;
+            --success: #10B981;
+            --danger: #EF4444;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        header p {
+            font-size: 0.9rem;
+            color: #6B7280;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .product-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .product-info h3 {
+            font-size: 1rem;
+        }
+
+        .product-info p {
+            font-size: 0.8rem;
+            color: #6B7280;
+        }
+
+        .product-actions button {
+            width: auto;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            background-color: var(--success);
+            margin-left: 5px;
+        }
+
+        .product-actions button.vender {
+            background-color: #F59E0B;
+        }
+
+        .alerta-baixo {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .alert-box {
+            background-color: #FEE2E2;
+            border: 1px solid #F87171;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            color: #991B1B;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📦 Controle de Estoque</h1>
+        <p>Versão Mobile / Web para Lojas</p>
+    </header>
+
+    <div id="alertaGeral" class="alert-box">
+        ⚠️ Existem produtos com estoque crítico!
+    </div>
+
+    <!-- Formulário de Cadastro -->
+    <div class="card">
+        <h2>Cadastrar Novo Produto</h2>
+        <div class="form-group">
+            <label>Nome do Produto</label>
+            <input type="text" id="nomeProduto" placeholder="Ex: Camiseta Polo">
+        </div>
+        <div class="form-group">
+            <label>Quantidade Atual</label>
+            <input type="number" id="qtdProduto" placeholder="Ex: 15">
+        </div>
+        <div class="form-group">
+            <label>Estoque Mínimo (Alerta)</label>
+            <input type="number" id="minProduto" placeholder="Ex: 3">
+        </div>
+        <div class="form-group">
+            <label>Preço de Venda (R$)</label>
+            <input type="number" step="0.01" id="precoProduto" placeholder="Ex: 49.90">
+        </div>
+        <button onclick="cadastrarProduto()">Salvar Produto</button>
+    </div>
+
+    <!-- Lista de Produtos -->
+    <div class="card">
+        <h2>Produtos no Estoque</h2>
+        <ul id="listaProdutos" class="product-list">
+            <!-- Os produtos entram aqui automaticamente -->
+        </ul>
+    </div>
+
+    <script>
+        // Carrega o estoque salvo no navegador do celular/pc (LocalStorage)
+        let estoque = JSON.parse(localStorage.getItem('estoque_loja')) || [];
+
+        function salvarNoStorage() {
+            localStorage.setItem('estoque_loja', JSON.stringify(estoque));
+            atualizarTela();
+        }
+
+        function cadastrarProduto() {
+            const nome = document.getElementById('nomeProduto').value.trim();
+            const qtd = parseInt(document.getElementById('qtdProduto').value);
+            const minimo = parseInt(document.getElementById('minProduto').value);
+            const preco = parseFloat(document.getElementById('precoProduto').value);
+
+            if (!nome || isNaN(qtd) || isNaN(minimo) || isNaN(preco)) {
+                alert("Por favor, preencha todos os campos corretamente!");
+                return;
+            }
+
+            const produto = { id: Date.now(), nome, qtd, minimo, preco };
+            estoque.push(produto);
+            salvarNoStorage();
+
+            // Limpa os campos
+            document.getElementById('nomeProduto').value = '';
+            document.getElementById('qtdProduto').value = '';
+            document.getElementById('minProduto').value = '';
+            document.getElementById('precoProduto').value = '';
+        }
+
+        function registrarVenda(id) {
+            const produto = estoque.find(p => p.id === id);
+            if (produto) {
+                const qtdVendaStr = prompt(`Quantas unidades de "${produto.nome}" foram vendidas?`, "1");
+                if (qtdVendaStr === null) return;
+                const qtdVenda = parseInt(qtdVendaStr);
+
+                if (isNaN(qtdVenda) || qtdVenda <= 0) {
+                    alert("Quantidade inválida!");
+                    return;
+                }
+
+                if (produto.qtd >= qtdVenda) {
+                    produto.qtd -= qtdVenda;
+                    salvarNoStorage();
+                } else {
+                    alert("Erro: Quantidade vendida maior do que o estoque atual!");
+                }
+            }
+        }
+
+        function excluirProduto(id) {
+            if (confirm("Deseja realmente apagar este produto?")) {
+                estoque = estoque.filter(p => p.id !== id);
+                salvarNoStorage();
+            }
+        }
+
+        function atualizarTela() {
+            const lista = document.getElementById('listaProdutos');
+            const alertaGeral = document.getElementById('alertaGeral');
+            lista.innerHTML = '';
+            
+            let temAlerta = false;
+
+            if (estoque.length === 0) {
+                lista.innerHTML = '<p style="text-align: center; color: #6B7280; padding: 20px;">Nenhum produto cadastrado.</p>';
+                alertaGeral.style.display = 'none';
+                return;
+            }
+
+            estoque.forEach(p => {
+                if (p.qtd <= p.minimo) {
+                    temAlerta = true;
+                }
+
+                const li = document.createElement('li');
+                li.className = 'product-item';
+                
+                li.innerHTML = `
+                    <div class="product-info">
+                        <h3>${p.nome}</h3>
+                        <p>Qtd: <span class="${p.qtd <= p.minimo ? 'alerta-baixo' : ''}">${p.qtd}</span> (Mín: ${p.minimo}) | R$ ${p.preco.toFixed(2)}</p>
+                    </div>
+                    <div class="product-actions">
+                        <button class="vender" onclick="registrarVenda(${p.id})">Vender</button>
+                        <button style="background-color: #EF4444;" onclick="excluirProduto(${p.id})">X</button>
+                    </div>
+                `;
+                lista.appendChild(li);
+            });
+
+            if (temAlerta) {
+                alertaGeral.style.display = 'block';
+            } else {
+                alertaGeral.style.display = 'none';
+            }
+        }
+
+        // Executa ao carregar a página
+        atualizarTela();
+    </script>
+</body>
+</html>
+button style="background-color: #EF4444;" onclick="excluirProduto(${p.id})">X</button>
+                    </div>
+                `;
+                lista.appendChild(li);
+            });
+
+            if (temAlerta) {
+                alertaGeral.style.display = 'block';
+            } else {
+                alertaGeral.style.display = 'none';
+            }
+        }
+
+        // Executa ao carregar a página
+        atualizarTela();
+    </script>
+</body>
+</html>
